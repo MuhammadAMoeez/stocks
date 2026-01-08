@@ -1,39 +1,41 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from datetime import date
 
-st.set_page_config(page_title='stock dashboard', page_icon='📈', layout='wide')
+st.title("Stock Dashboard 📊")
 
-st.title("Stock Dashboard 📈")
-
+# Sidebar inputs
 st.sidebar.header("Setting for Stock")
-ticker_symbol = st.sidebar.text_input("enter ticker symbol", "AAPL")
-period = st.sidebar.selectbox("Select the period", ['1d', '1M', "6M", '1Y', "5Y"])
-interval = st.sidebar.selectbox("Select the interval", ['1m', '5m', '15m', '1h', '1d'])
+ticker = st.sidebar.text_input("enter ticker symbol", "AAPL")
+period = st.sidebar.selectbox("Select the period", ["1d", "5d", "1mo", "3mo", "6mo", "1y", "5y"])
+interval = st.sidebar.selectbox("Select the Interval", ["1m", "5m", "15m", "1h", "1d"])
 
-ticker = yf.Ticker(ticker_symbol)
-data = ticker.history(period=period, interval=interval)
+# Cache data to reduce API calls
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def get_stock_data(ticker, period, interval):
+    try:
+        stock = yf.Ticker(ticker)
+        data = stock.history(period=period, interval=interval)
+        return data, stock.info
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return None, None
 
-latest_price = data['Close'].iloc[-1] if not data.empty else "N/a"
-st.metric(label=f"Current Price : {ticker_symbol}", value=f"${latest_price: .2f}" if latest_price != "N/a" else "No Data")
+# Fetch data
+data, info = get_stock_data(ticker, period, interval)
 
-st.subheader(f"Price Chart for {ticker_symbol}")
-if not data.empty:
-    st.line_chart(data)
-else:
-    st.warning(f"No data available for {ticker_symbol}")
-
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.write(f"**Previous Close**", ticker.info.get("previousClose", "N/A") )
-with col2:
-    st.write(f"**Market Cap**", ticker.info.get("marketcap", "N/A") )
-with col3:
-    st.write(f"**52-Week high**", ticker.info.get("fiftyTwoWeekHigh", "N/A") )
-
-
-st.info("Refresh to get latest data")
+if data is not None and not data.empty:
+    # Display current price
+    st.subheader(f"Current Price: {ticker}")
+    current_price = data['Close'].iloc[-1]
+    st.metric("Price", f"$ {current_price:.2f}")
     
+    # Display chart
+    st.subheader(f"Price Chart for {ticker}")
+    st.line_chart(data['Close'])
+    
+    # Display data table
+    st.subheader("Historical Data")
+    st.dataframe(data)
+else:
+    st.warning("Unable to fetch stock data. Please try again later.")
